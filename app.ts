@@ -1,43 +1,61 @@
 import {CREATED, BAD_REQUEST, UNAUTHORIZED} from 'http-status-codes';
-import * as loki from 'lokijs';
-import * as express from 'express';
-import * as basic from 'express-basic-auth';
+import loki from 'lokijs';
+import express from 'express';
+import basic from 'express-basic-auth';
 
+var port = process.env.PORT || 8080;
 var app = express();
 app.use(express.json());
+const admin = basic({ users: { admin: 'admin' }});
 
-const adminFilter = basic({ users: { admin: 'P@ssw0rd!' }});
+// Datenbank und Guest Collection erstellen
+var db = new loki('Database Partyadministation');
+var guests = db.addCollection('guests');
+// var parties = db.addCollection('parties');
 
-const db = new loki(__dirname + '/db.dat', {autosave: true, autoload: true});
-let guests = db.getCollection('guests');
-if (!guests) {
-  guests = db.addCollection('guests');
-}
-
-app.get('/guests', adminFilter, (req, res) => {
-  res.send(guests.find());
+// Beispiel insert von einem Guest
+/*
+var max = guests.insert({
+    firstName: 'Max',
+    lastName: 'Mustermann'
 });
+*/
 
-app.get('/party', (req, res, next) => {
-  res.send({
-    title: 'Happy new year!',
-    location: 'At my home',
-    date: new Date(2017, 0, 1)
+
+// Get request von http://localhost:8080/party
+app.get('/party', function (request, response, next) {
+    response.send({
+        title: 'birthday party',
+        location: 'at home',
+        date: new Date(2019, 4, 2)
+      });
   });
+
+// Get request von http://localhost:8080/guests
+app.get('/guests', admin, function (request,response){
+    response.send(guests.find());
+    // Wenn man z.B. guests mit namen max haben möchte dann:
+    /*res.send(guests.find({
+        'first name': 'Max'
+    }));*/
 });
 
-app.post('/register', (req, res, next) => {
-  if (!req.body.firstName || !req.body.lastName) {
-    res.status(BAD_REQUEST).send('Missing mandatory member(s)');
-  } else {
-    const count = guests.count();
-    if (count < 10) {
-      const newDoc = guests.insert({firstName: req.body.firstName, lastName: req.body.lastName});
-      res.status(CREATED).send(newDoc);
+// Post request von http://localhost:8080/register
+app.post('/register', function(request,response, next){
+    var fname = request.body.firstName;
+    var lname = request.body.lastName;
+
+    if(fname != null || lname != null){
+        if(guests.count() < 10){
+            var guest = guests.insert({firstName: fname, lastName: lname});
+            response.status(CREATED).send(guest);
+        } else {
+            response.status(UNAUTHORIZED).send('Reached max amount of guests!')
+        }
     } else {
-      res.status(UNAUTHORIZED).send('Sorry, max. number of guests already reached');
+        response.status(BAD_REQUEST).send('No names defined!');
     }
-  }
 });
 
-app.listen(8080, () => console.log('API is listening'));
+app.listen(port);
+console.log('Server started! At http://localhost:' + port);
